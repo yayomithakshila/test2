@@ -1,0 +1,80 @@
+name: Label & comment issues
+
+on:
+  issues:
+    types: [opened, reopened, closed]
+  pull_request:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  label_issues:
+    if: ${{ github.event_name == 'issues' && github.event.action != 'closed' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Attach labels to issues
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ["issue", "fix"]
+            });
+
+      - name: Comment on new issue
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: "🙌 Thanks for opening this issue! We'll take a look as soon as possible."
+            });
+
+  issue_closed:
+    if: ${{ github.event_name == 'issues' && github.event.action == 'closed' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment on closed issue
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: "✅ The issue is now resolved."
+            });
+
+  comment_on_first_pr:
+    if: ${{ github.event_name == 'pull_request' && github.event.action == 'opened' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR count for the user
+        id: pr_check
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const result = await github.rest.search.issuesAndPullRequests({
+              q: `is:pr author:${context.payload.pull_request.user.login} repo:${context.repo.owner}/${context.repo.repo}`
+            });
+            core.setOutput("pr_count", result.data.total_count.toString());
+
+      - name: Comment on first pull request
+        if: ${{ steps.pr_check.outputs.pr_count == '1' }}
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.payload.pull_request.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: "🎉 Congratulations on opening your first pull request!"
+            });
